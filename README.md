@@ -21,12 +21,24 @@ Open the URL printed by Vite (default **http://127.0.0.1:43123**).
 
 ## Controls
 
+### Desktop
+
 | Input | Action |
 |--------|--------|
 | Drag | Pan the map |
 | Scroll | Zoom |
 | Click | Select continent / nation / region / state / city |
 | Sidebar | Toggle layers, pause, change speed, regenerate |
+
+### Mobile
+
+| Input | Action |
+|--------|--------|
+| One finger drag | Pan |
+| Pinch | Zoom |
+| **+ / −** buttons | Zoom |
+| Tap | Select a region; opens the control sheet with stats |
+| Bottom sheet | Swipe up **Controls** for layers, speed, and regenerate |
 
 ## Build
 

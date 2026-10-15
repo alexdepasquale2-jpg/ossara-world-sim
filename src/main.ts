@@ -4,6 +4,7 @@ import { generateWorld, entityById } from "./sim/worldGen";
 import { DEFAULT_LAYERS } from "./sim/types";
 import { WorldScene } from "./render/scene";
 import { SimPanel } from "./ui/panel";
+import { ViewportControls } from "./input/viewportControls";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -11,10 +12,24 @@ const viewport = document.createElement("div");
 viewport.className = "viewport";
 const canvas = document.createElement("canvas");
 viewport.appendChild(canvas);
+
 const hud = document.createElement("div");
 hud.className = "hud";
-hud.textContent = "Drag to pan · Scroll to zoom · Click to select";
 viewport.appendChild(hud);
+
+const zoomFab = document.createElement("div");
+zoomFab.className = "zoom-fab";
+zoomFab.innerHTML = `
+  <button type="button" class="fab" id="zoom-in" aria-label="Zoom in">+</button>
+  <button type="button" class="fab" id="zoom-out" aria-label="Zoom out">−</button>
+`;
+viewport.appendChild(zoomFab);
+
+const backdrop = document.createElement("button");
+backdrop.type = "button";
+backdrop.className = "sheet-backdrop";
+backdrop.setAttribute("aria-label", "Close controls");
+backdrop.hidden = true;
 
 let world = generateWorld(Date.now() % 100000);
 let paused = false;
@@ -41,66 +56,61 @@ const panel = new SimPanel({
     scene.setWorld(world);
     panel.setSelected(null, world);
   },
+  onSheetOpenChange: (open) => {
+    backdrop.hidden = !open;
+    backdrop.classList.toggle("visible", open);
+  },
 });
 
-app.appendChild(panel.root);
 app.appendChild(viewport);
+app.appendChild(backdrop);
+app.appendChild(panel.root);
 
 panel.setSelected(null, world);
 
-let panX = 0;
-let panY = 0;
-let zoom = 1;
-scene.setPan(panX, panY);
-scene.setZoom(zoom);
+function updateHud(): void {
+  const mobile = window.matchMedia("(max-width: 768px)").matches;
+  hud.textContent = mobile
+    ? "One finger pan · Pinch zoom · Tap to select"
+    : "Drag to pan · Scroll to zoom · Click to select";
+  app.classList.toggle("layout-mobile", mobile);
+  zoomFab.hidden = !mobile;
+}
 
-let dragging = false;
-let lastX = 0;
-let lastY = 0;
-
-canvas.addEventListener("pointerdown", (e) => {
-  dragging = true;
-  lastX = e.clientX;
-  lastY = e.clientY;
-  canvas.classList.add("dragging");
-  canvas.setPointerCapture(e.pointerId);
+updateHud();
+window.matchMedia("(max-width: 768px)").addEventListener("change", () => {
+  updateHud();
+  scene.resize();
 });
 
-canvas.addEventListener("pointermove", (e) => {
-  if (!dragging) return;
-  const dx = e.clientX - lastX;
-  const dy = e.clientY - lastY;
-  lastX = e.clientX;
-  lastY = e.clientY;
-  panX -= dx / zoom;
-  panY += dy / zoom;
-  scene.setPan(panX, panY);
-});
+backdrop.addEventListener("click", () => panel.setSheetOpen(false));
 
-canvas.addEventListener("pointerup", (e) => {
-  dragging = false;
-  canvas.classList.remove("dragging");
-  canvas.releasePointerCapture(e.pointerId);
-});
-
-canvas.addEventListener("click", (e) => {
-  if (Math.abs(e.movementX) > 4 || Math.abs(e.movementY) > 4) return;
-  const id = scene.pick(e.clientX, e.clientY);
-  panel.setSelected(id, world);
-  const entity = id ? entityById(world, id) : null;
-  scene.highlightEntity(entity ?? null);
-});
-
-canvas.addEventListener(
-  "wheel",
-  (e) => {
-    e.preventDefault();
-    const factor = e.deltaY > 0 ? 0.92 : 1.08;
-    zoom = Math.max(0.35, Math.min(3.5, zoom * factor));
+const controls = new ViewportControls({
+  canvas,
+  onChange: ({ panX, panY, zoom }) => {
+    scene.setPan(panX, panY);
     scene.setZoom(zoom);
   },
-  { passive: false },
-);
+  onTap: (x, y) => {
+    const id = scene.pick(x, y);
+    panel.setSelected(id, world);
+    const entity = id ? entityById(world, id) : null;
+    scene.highlightEntity(entity ?? null);
+    if (window.matchMedia("(max-width: 768px)").matches && id) {
+      panel.setSheetOpen(true);
+    }
+  },
+});
+
+scene.setPan(controls.panX, controls.panY);
+scene.setZoom(controls.zoom);
+
+zoomFab.querySelector("#zoom-in")!.addEventListener("click", () => {
+  controls.adjustZoom(1.15);
+});
+zoomFab.querySelector("#zoom-out")!.addEventListener("click", () => {
+  controls.adjustZoom(1 / 1.15);
+});
 
 let lastTime = performance.now();
 let accum = 0;

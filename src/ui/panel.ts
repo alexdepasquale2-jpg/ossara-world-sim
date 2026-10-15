@@ -9,12 +9,15 @@ export interface PanelCallbacks {
   onPauseToggle: () => void;
   onSpeedChange: (speed: number) => void;
   onRegenerate: () => void;
+  onSheetOpenChange?: (open: boolean) => void;
 }
 
 export class SimPanel {
   readonly root: HTMLElement;
   private statsEl: HTMLElement;
   private breadcrumbEl: HTMLElement;
+  private peekSummaryEl: HTMLElement;
+  private sheetOpen = false;
   private callbacks: PanelCallbacks;
   private view: ViewState;
 
@@ -33,6 +36,15 @@ export class SimPanel {
     this.root = document.createElement("aside");
     this.root.className = "panel";
     this.root.innerHTML = `
+      <div class="sheet-peek" id="sheet-peek">
+        <button type="button" class="sheet-handle" id="sheet-toggle" aria-expanded="false">
+          <span class="handle-bar"></span>
+          <span class="handle-label">Controls</span>
+        </button>
+        <div class="peek-summary" id="peek-summary">Day 1 · Pan & pinch the map</div>
+        <button type="button" class="btn peek-pause" id="btn-pause-peek">Pause</button>
+      </div>
+      <div class="sheet-body">
       <header class="panel-header">
         <h1>Ossara Sim</h1>
         <p class="subtitle">Continent · Nation · Region · State · City · People · Art</p>
@@ -66,15 +78,22 @@ export class SimPanel {
           <li><span class="dot artist"></span> Artists</li>
         </ul>
       </section>
+      </div>
     `;
 
     this.statsEl = this.root.querySelector("#stats")!;
     this.breadcrumbEl = this.root.querySelector("#breadcrumb")!;
+    this.peekSummaryEl = this.root.querySelector("#peek-summary")!;
     this.bindLayers();
-    this.root.querySelector("#btn-pause")!.addEventListener("click", () => {
+    const togglePause = () => {
       this.view.paused = !this.view.paused;
       this.updatePauseLabel();
       this.callbacks.onPauseToggle();
+    };
+    this.root.querySelector("#btn-pause")!.addEventListener("click", togglePause);
+    this.root.querySelector("#btn-pause-peek")!.addEventListener("click", togglePause);
+    this.root.querySelector("#sheet-toggle")!.addEventListener("click", () => {
+      this.setSheetOpen(!this.sheetOpen);
     });
     this.root.querySelector("#speed")!.addEventListener("input", (e) => {
       const v = Number((e.target as HTMLInputElement).value);
@@ -90,11 +109,20 @@ export class SimPanel {
     return this.view;
   }
 
+  setSheetOpen(open: boolean): void {
+    this.sheetOpen = open;
+    this.root.classList.toggle("open", open);
+    const toggle = this.root.querySelector("#sheet-toggle")!;
+    toggle.setAttribute("aria-expanded", String(open));
+    this.callbacks.onSheetOpenChange?.(open);
+  }
+
   setSelected(id: string | null, world: World): void {
     this.view.selectedId = id;
     if (!id) {
-      this.breadcrumbEl.textContent = "Click the map to inspect";
+      this.breadcrumbEl.textContent = this.inspectHint();
       this.statsEl.innerHTML = this.globalSummary(world);
+      this.updatePeek(world);
       return;
     }
     const entity = entityById(world, id);
@@ -104,6 +132,7 @@ export class SimPanel {
       .map((e) => `<span class="crumb">${e.name}</span>`)
       .join('<span class="sep">›</span>');
     this.statsEl.innerHTML = entityStatsHtml(entity, world);
+    this.updatePeek(world, entity.name);
   }
 
   tick(world: World): void {
@@ -117,6 +146,22 @@ export class SimPanel {
     }
     const dayEl = this.root.querySelector(".day-counter");
     if (dayEl) dayEl.textContent = `Day ${world.day}`;
+    const selected = this.view.selectedId
+      ? entityById(world, this.view.selectedId)
+      : null;
+    this.updatePeek(world, selected?.name);
+  }
+
+  private inspectHint(): string {
+    return window.matchMedia("(max-width: 768px)").matches
+      ? "Tap the map to inspect"
+      : "Click the map to inspect";
+  }
+
+  private updatePeek(world: World, selectionName?: string): void {
+    const c = world.continent.stats;
+    const sel = selectionName ? ` · ${selectionName}` : "";
+    this.peekSummaryEl.textContent = `Day ${world.day} · ${formatPopulation(c.population)} pop · ${pct(c.happiness)} happy${sel}`;
   }
 
   private globalSummary(world: World): string {
@@ -161,8 +206,9 @@ export class SimPanel {
   }
 
   private updatePauseLabel(): void {
-    const btn = this.root.querySelector("#btn-pause")!;
-    btn.textContent = this.view.paused ? "Resume" : "Pause";
+    const label = this.view.paused ? "Resume" : "Pause";
+    this.root.querySelector("#btn-pause")!.textContent = label;
+    this.root.querySelector("#btn-pause-peek")!.textContent = label;
   }
 }
 

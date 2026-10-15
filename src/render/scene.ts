@@ -45,13 +45,17 @@ export class WorldScene {
 
     this.scene.add(this.artGroup);
     window.addEventListener("resize", () => this.resize());
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", () => this.resize());
+    }
     this.resize();
   }
 
   resize(): void {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    this.renderer.setSize(w, h);
+    const parent = this.renderer.domElement.parentElement;
+    const w = parent?.clientWidth ?? window.innerWidth;
+    const h = parent?.clientHeight ?? window.innerHeight;
+    this.renderer.setSize(w, h, false);
     const aspect = w / h;
     const viewH = 800 / (this.camera.zoom || 1);
     this.camera.left = (-viewH * aspect) / 2;
@@ -319,10 +323,10 @@ export class WorldScene {
 
   pick(screenX: number, screenY: number): string | null {
     if (!this.world) return null;
-    const ndc = new THREE.Vector2(
-      (screenX / window.innerWidth) * 2 - 1,
-      -(screenY / window.innerHeight) * 2 + 1,
-    );
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const nx = (screenX - rect.left) / rect.width;
+    const ny = (screenY - rect.top) / rect.height;
+    const ndc = new THREE.Vector2(nx * 2 - 1, -(ny * 2 - 1));
     const ray = new THREE.Raycaster();
     ray.setFromCamera(ndc, this.camera);
     const hits = ray.intersectObjects(this.scene.children, true);
