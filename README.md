@@ -19,6 +19,11 @@ npm run dev
 
 Open the URL printed by Vite (default **http://127.0.0.1:43123**).
 
+## Live demo
+
+- **GitHub Pages:** https://alexdepasquale2-jpg.github.io/ossara-world-sim/ (deploys on push to `main`)
+- **Vercel (claim for permanent URL):** use the [Publish] flow in Cursor or run `npx vercel login` then `npx vercel --prod`
+
 ## Controls
 
 ### Desktop
