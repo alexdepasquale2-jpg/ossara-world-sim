@@ -33,12 +33,27 @@ function computeFlows(world: World, econ: CityEconomy): void {
   const art = city.stats.artIndex;
   const scale = pop / 2500;
 
-  // Balanced labor focus until policy knobs land in Task 6.
-  econ.production = goodRecord(
-    scale * econStat * 0.55,
-    scale * econStat * 0.48,
-    scale * art * 0.35 + 0.08,
-  );
+  const policy = world.cityPolicies.find((p) => p.cityId === econ.cityId);
+  let prodFood = scale * econStat * 0.55;
+  let prodGoods = scale * econStat * 0.48;
+  let prodCulture = scale * art * 0.35 + 0.08;
+  switch (policy?.laborFocus) {
+    case "industry":
+      prodGoods *= 1.18;
+      prodCulture *= 0.92;
+      break;
+    case "arts":
+      prodCulture *= 1.22;
+      prodFood *= 0.95;
+      break;
+    case "services":
+      prodFood *= 1.08;
+      prodGoods *= 1.05;
+      break;
+    default:
+      break;
+  }
+  econ.production = goodRecord(prodFood, prodGoods, prodCulture);
   econ.consumption = goodRecord(
     scale * 0.42,
     scale * 0.32,

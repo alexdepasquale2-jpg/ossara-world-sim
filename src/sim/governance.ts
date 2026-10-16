@@ -1,5 +1,15 @@
+import { pushDecision, pushEvent } from "./events";
 import { Rng } from "./rng";
-import type { Pact, World } from "./types";
+import type {
+  CityPolicy,
+  GeoEntity,
+  LaborFocus,
+  NationMandate,
+  Pact,
+  TradeOpenness,
+  World,
+} from "./types";
+import { entityById } from "./worldGen";
 
 const PACT_COLORS = [
   0x4a90d9,
@@ -85,4 +95,216 @@ export function cityPactId(world: World, cityId: string): string | null {
 
 export function pactById(world: World, pactId: string): Pact | undefined {
   return world.pacts.find((p) => p.id === pactId);
+}
+
+const OPENNESS: TradeOpenness[] = ["closed", "balanced", "open"];
+const LABOR: LaborFocus[] = ["industry", "services", "arts"];
+
+export function initGovernanceData(world: World, rng: Rng): void {
+  const nations = world.entities.filter((e) => e.kind === "nation");
+  world.nationMandates = nations.map((n) => ({
+    nationId: n.id,
+    tradeOpenness: rng.pick(OPENNESS),
+    cultureInvestment: rng.pick(["low", "medium", "high"] as const),
+    laborFocus: rng.pick(LABOR),
+  }));
+
+  const cities = world.entities.filter((e) => e.kind === "city");
+  world.cityPolicies = cities.map((city) => {
+    const nation = findNationForCity(world, city.id);
+    const mandate = world.nationMandates.find((m) => m.nationId === nation?.id);
+    const conflict =
+      mandate &&
+      (rng.next() < 0.35
+        ? { tradeOpenness: rng.pick(OPENNESS) }
+        : null);
+    return {
+      cityId: city.id,
+      tradeOpenness: conflict?.tradeOpenness ?? mandate?.tradeOpenness ?? "balanced",
+      cultureInvestment: mandate?.cultureInvestment ?? "medium",
+      laborFocus: mandate?.laborFocus ?? "services",
+      mandateConflictDays: conflict ? 1 : 0,
+    };
+  });
+}
+
+function findNationForCity(world: World, cityId: string): GeoEntity | undefined {
+  let current = entityById(world, cityId);
+  while (current) {
+    if (current.kind === "nation") return current;
+    if (!current.parentId) break;
+    current = entityById(world, current.parentId);
+  }
+  return undefined;
+}
+
+function policyConflictsWithMandate(
+  policy: CityPolicy,
+  mandate: NationMandate,
+): boolean {
+  return policy.tradeOpenness !== mandate.tradeOpenness;
+}
+
+function tensionKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
+}
+
+export function getPactTension(
+  world: World,
+  pactAId: string,
+  pactBId: string,
+): number {
+  const key = tensionKey(pactAId, pactBId);
+  const row = world.pactTensions.find(
+    (t) => tensionKey(t.pactAId, t.pactBId) === key,
+  );
+  return row?.value ?? 0;
+}
+
+export function adjustPactTension(
+  world: World,
+  pactAId: string,
+  pactBId: string,
+  delta: number,
+): void {
+  const key = tensionKey(pactAId, pactBId);
+  let row = world.pactTensions.find(
+    (t) => tensionKey(t.pactAId, t.pactBId) === key,
+  );
+  if (!row) {
+    row = { pactAId, pactBId, value: 0 };
+    world.pactTensions.push(row);
+  }
+  row.value = Math.max(0, Math.min(100, row.value + delta));
+}
+
+const OVERRIDE_ESCALATION_DAYS = 4;
+const STANCE_COOLDOWN_DAYS = 3;
+
+export function tickGovernance(world: World, rng: Rng): void {
+  for (const policy of world.cityPolicies) {
+    const nation = findNationForCity(world, policy.cityId);
+    if (!nation) continue;
+    const mandate = world.nationMandates.find((m) => m.nationId === nation.id);
+    if (!mandate) continue;
+
+    if (policyConflictsWithMandate(policy, mandate)) {
+      policy.mandateConflictDays += 1;
+      if (policy.mandateConflictDays >= OVERRIDE_ESCALATION_DAYS) {
+        const city = entityById(world, policy.cityId);
+        const pactId = cityPactId(world, policy.cityId);
+        const decisionId = `override-${policy.cityId}-${world.day}`;
+        if (!world.decisions.some((d) => d.id === decisionId)) {
+          pushDecision(world, {
+            id: decisionId,
+            type: "override",
+            title: "Override proposal",
+            body: `${city?.name ?? "A member city"} asks whether regional trade rules should prevail over local policy.`,
+            deadlineDay: world.day + 5,
+            entityIds: [policy.cityId],
+            pactId,
+          });
+        }
+      }
+    } else {
+      policy.mandateConflictDays = 0;
+    }
+  }
+
+  if (world.day % 7 === 0 && world.pacts.length >= 2) {
+    const a = rng.pick(world.pacts);
+    const b = rng.pick(world.pacts.filter((p) => p.id !== a.id));
+    if (b) adjustPactTension(world, a.id, b.id, rng.range(2, 8));
+  }
+}
+
+export function resolveDecision(
+  world: World,
+  decisionId: string,
+  option: "approve" | "deny" | "defer",
+): void {
+  const idx = world.decisions.findIndex((d) => d.id === decisionId);
+  if (idx < 0) return;
+  const decision = world.decisions[idx]!;
+  world.decisions.splice(idx, 1);
+
+  const cityId = decision.entityIds[0];
+  const policy = world.cityPolicies.find((p) => p.cityId === cityId);
+  const nation = cityId ? findNationForCity(world, cityId) : undefined;
+  const mandate = world.nationMandates.find((m) => m.nationId === nation?.id);
+
+  if (decision.type === "override" && policy && mandate) {
+    if (option === "approve") {
+      policy.tradeOpenness = mandate.tradeOpenness;
+      policy.mandateConflictDays = 0;
+    } else if (option === "deny") {
+      const pactId = cityPactId(world, policy.cityId);
+      if (pactId) {
+        for (const other of world.pacts) {
+          if (other.id !== pactId) adjustPactTension(world, pactId, other.id, 4);
+        }
+      }
+    } else {
+      policy.tradeOpenness = mandate.tradeOpenness;
+    }
+  }
+
+  if (decision.type === "preClash" && decision.pactId) {
+    const enemy = world.pacts.find((p) => p.id !== decision.pactId);
+    if (enemy) {
+      if (option === "approve") {
+        adjustPactTension(world, decision.pactId, enemy.id, 12);
+      } else {
+        adjustPactTension(world, decision.pactId, enemy.id, -10);
+      }
+    }
+  }
+
+  pushEvent(world, {
+    day: world.day,
+    category: "governance",
+    title: `Decision ${option}`,
+    body: decision.title,
+    entityIds: decision.entityIds,
+    pactIds: decision.pactId ? [decision.pactId] : [],
+    severity: "info",
+  });
+}
+
+export function togglePactStance(
+  world: World,
+  pactId: string,
+  key: keyof Pact["stances"],
+): boolean {
+  const pact = pactById(world, pactId);
+  if (!pact) return false;
+  if (world.day < pact.stanceCooldownUntilDay) return false;
+  pact.stances[key] = !pact.stances[key];
+  pact.stanceCooldownUntilDay = world.day + STANCE_COOLDOWN_DAYS;
+  pushEvent(world, {
+    day: world.day,
+    category: "governance",
+    title: `${pact.name} updated stance`,
+    body: `Patrons adjusted ${key.replace(/([A-Z])/g, " $1").toLowerCase()}.`,
+    entityIds: [],
+    pactIds: [pactId],
+    severity: "info",
+  });
+  return true;
+}
+
+export function fundCooperationEvent(world: World, pactId: string): boolean {
+  const pact = pactById(world, pactId);
+  if (!pact || pact.cooperationBudget < 15) return false;
+  pact.cooperationBudget -= 15;
+  pushEvent(world, {
+    day: world.day,
+    category: "cooperation",
+    title: `${pact.name} funded exchange`,
+    body: "Member cities pooled resources for a joint civic program.",
+    entityIds: pact.memberCityIds.slice(0, 2),
+    pactIds: [pactId],
+    severity: "info",
+  });
+  return true;
 }
