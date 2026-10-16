@@ -270,6 +270,9 @@ export function generateWorld(seed = 42): World {
     decisions: [],
     playerPactId: null,
     referencePrices: { food: 1, goods: 1, culture: 1 },
+    cityPolicies: [],
+    nationMandates: [],
+    pactTensions: [],
   };
 
   world.pacts = generatePacts(world, rng);

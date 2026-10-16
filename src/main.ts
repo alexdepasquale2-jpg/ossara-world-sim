@@ -149,6 +149,8 @@ function frame(now: number): void {
       scene.updateResidents(world.residents);
       scene.updateTradeRoutes(world);
       scene.updateMigrationFlows(world);
+      scene.updateInventionPulses(world);
+      scene.updateDayNight(world);
       panel.tick(world);
     }
   }

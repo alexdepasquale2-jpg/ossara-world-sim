@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { activeRoutes, cityCenter } from "../sim/economy";
+import { activeInventionsForCity } from "../sim/inventions";
 import { activeMigrationFlows } from "../sim/migration";
 import { cityPactId, pactById } from "../sim/governance";
 import { entityById } from "../sim/worldGen";
@@ -22,6 +23,8 @@ export class WorldScene {
   private artGroup = new THREE.Group();
   private routeGroup = new THREE.Group();
   private migrationGroup = new THREE.Group();
+  private inventionGroup = new THREE.Group();
+  private nightOverlay: THREE.Mesh | null = null;
   private labelSprites: THREE.Sprite[] = [];
   private world: World | null = null;
   private layers: LayerVisibility;
@@ -52,6 +55,7 @@ export class WorldScene {
     this.scene.add(this.artGroup);
     this.scene.add(this.routeGroup);
     this.scene.add(this.migrationGroup);
+    this.scene.add(this.inventionGroup);
     window.addEventListener("resize", () => this.resize());
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", () => this.resize());
@@ -80,6 +84,8 @@ export class WorldScene {
     this.rebuildResidents();
     this.updateTradeRoutes(world);
     this.updateMigrationFlows(world);
+    this.updateInventionPulses(world);
+    this.updateDayNight(world);
   }
 
   setLayers(layers: LayerVisibility): void {
@@ -108,6 +114,7 @@ export class WorldScene {
     }
     this.artGroup.visible = this.layers.art;
     this.migrationGroup.visible = this.layers.migration;
+    this.inventionGroup.visible = this.layers.inventions;
   }
 
   private rebuildGeo(): void {
@@ -131,10 +138,24 @@ export class WorldScene {
       const group = new THREE.Group();
       group.userData.entityId = entity.id;
 
+      let fillColor = entity.color;
+      if (entity.kind === "city" && this.world) {
+        const region = this.world.entities.find(
+          (e) => e.id === entity.parentId && e.kind === "region",
+        );
+        if (region) {
+          const hash =
+            (region.name.charCodeAt(0) + region.name.length * 17) % 360;
+          const c = new THREE.Color(entity.color);
+          c.offsetHSL(hash / 3600, 0.06, 0.03);
+          fillColor = c.getHex();
+        }
+      }
+
       const fill = new THREE.Mesh(
         new THREE.PlaneGeometry(entity.bounds.w, entity.bounds.h),
         new THREE.MeshBasicMaterial({
-          color: entity.color,
+          color: fillColor,
           transparent: true,
           opacity: entity.kind === "city" ? 0.92 : 0.35,
         }),
@@ -238,6 +259,60 @@ export class WorldScene {
     this.residentMesh.visible = this.layers.resident;
     this.scene.add(this.residentMesh);
     this.updateResidents(this.world.residents);
+  }
+
+  updateInventionPulses(world: World): void {
+    while (this.inventionGroup.children.length) {
+      const child = this.inventionGroup.children[0]!;
+      this.inventionGroup.remove(child);
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    }
+    if (!this.layers.inventions) {
+      this.inventionGroup.visible = false;
+      return;
+    }
+    this.inventionGroup.visible = true;
+    const pulse = 0.65 + Math.sin(performance.now() / 420) * 0.2;
+    for (const entity of world.entities) {
+      if (entity.kind !== "city") continue;
+      const invs = activeInventionsForCity(world, entity.id);
+      if (invs.length === 0) continue;
+      const cx = entity.bounds.x + entity.bounds.w / 2;
+      const cy = entity.bounds.y + entity.bounds.h / 2;
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(6, 9 + pulse * 4, 24),
+        new THREE.MeshBasicMaterial({
+          color: 0x9be7ff,
+          transparent: true,
+          opacity: 0.55,
+        }),
+      );
+      ring.position.set(cx, -cy, 11);
+      this.inventionGroup.add(ring);
+    }
+  }
+
+  updateDayNight(world: World): void {
+    const phase = (world.day % 2) + (world.tick % 120) / 120;
+    const nightStrength = phase < 1 ? phase : 2 - phase;
+    if (!this.nightOverlay) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0x0a1428,
+        transparent: true,
+        opacity: 0,
+      });
+      this.nightOverlay = new THREE.Mesh(
+        new THREE.PlaneGeometry(4000, 4000),
+        mat,
+      );
+      this.nightOverlay.position.set(500, -400, 50);
+      this.scene.add(this.nightOverlay);
+    }
+    const mat = this.nightOverlay.material as THREE.MeshBasicMaterial;
+    mat.opacity = nightStrength * 0.35;
   }
 
   updateMigrationFlows(_world: World): void {

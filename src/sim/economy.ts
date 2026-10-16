@@ -1,4 +1,6 @@
 import { cityPactId } from "./governance";
+import { inventionMultipliersForCity } from "./inventions";
+import { maybePushShortageEvent } from "./events";
 import { entityById } from "./worldGen";
 import type { CityEconomy, GeoEntity, GoodKind, TradeRoute, World } from "./types";
 
@@ -147,6 +149,7 @@ function createRoutes(world: World): void {
       volume: c.volume,
       progress: 0,
       merchantResidentId: null,
+      daysActive: 0,
     });
     const fromEcon = world.economies.find((e) => e.cityId === c.fromCityId);
     if (fromEcon) {
@@ -235,10 +238,13 @@ export function tickEconomy(world: World): void {
 
   for (const econ of world.economies) {
     computeFlows(world, econ);
+    const invMult = inventionMultipliersForCity(world, econ.cityId);
     for (const good of GOODS) {
+      econ.production[good] *= invMult[good];
       econ.stock[good] += econ.production[good] - econ.consumption[good];
     }
     clampStock(econ);
+    maybePushShortageEvent(world, econ.cityId);
   }
 
   adjustReferencePrices(world);

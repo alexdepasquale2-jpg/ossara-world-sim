@@ -92,18 +92,85 @@ export interface TradeRoute {
   volume: number;
   progress: number;
   merchantResidentId: string | null;
+  daysActive: number;
+}
+
+export type InventionKind = "production" | "trade" | "culture" | "governance";
+
+export interface InventionPerks {
+  productionMult: number;
+  tradeMult: number;
+  cultureMult: number;
+  governanceMult: number;
 }
 
 export interface InventionRecord {
   id: string;
+  name: string;
+  kind: InventionKind;
+  originCityId: string;
+  discoveredDay: number;
+  spreadLevel: 0 | 1 | 2 | 3;
+  spreadCityIds: string[];
+  perks: InventionPerks;
+  power: number;
+  obsolete: boolean;
 }
+
+export type SimEventCategory =
+  | "economy"
+  | "migration"
+  | "governance"
+  | "invention"
+  | "cooperation"
+  | "conflict";
 
 export interface SimEvent {
   id: string;
+  day: number;
+  category: SimEventCategory;
+  title: string;
+  body: string;
+  entityIds: string[];
+  pactIds: string[];
+  severity: "info" | "warning" | "decision";
 }
+
+export type PendingDecisionType = "override" | "alliance" | "preClash";
 
 export interface PendingDecision {
   id: string;
+  type: PendingDecisionType;
+  title: string;
+  body: string;
+  deadlineDay: number;
+  entityIds: string[];
+  pactId: string | null;
+}
+
+export type TradeOpenness = "closed" | "balanced" | "open";
+export type CultureInvestment = "low" | "medium" | "high";
+export type LaborFocus = "industry" | "services" | "arts";
+
+export interface CityPolicy {
+  cityId: string;
+  tradeOpenness: TradeOpenness;
+  cultureInvestment: CultureInvestment;
+  laborFocus: LaborFocus;
+  mandateConflictDays: number;
+}
+
+export interface NationMandate {
+  nationId: string;
+  tradeOpenness: TradeOpenness;
+  cultureInvestment: CultureInvestment;
+  laborFocus: LaborFocus;
+}
+
+export interface PactTension {
+  pactAId: string;
+  pactBId: string;
+  value: number;
 }
 
 export interface World {
@@ -122,9 +189,12 @@ export interface World {
   decisions: PendingDecision[];
   playerPactId: string | null;
   referencePrices: Record<GoodKind, number>;
+  cityPolicies: CityPolicy[];
+  nationMandates: NationMandate[];
+  pactTensions: PactTension[];
 }
 
-export type OverlayLayer = "migration";
+export type OverlayLayer = "migration" | "inventions";
 
 export type LayerVisibility = Record<EntityKind | OverlayLayer, boolean>;
 
@@ -147,4 +217,5 @@ export const DEFAULT_LAYERS: LayerVisibility = {
   resident: true,
   art: true,
   migration: false,
+  inventions: false,
 };
