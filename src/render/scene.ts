@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { cityPactId, pactById } from "../sim/governance";
 import type { ArtPiece, GeoEntity, LayerVisibility, Resident, World } from "../sim/types";
 
 const GEO_ORDER: GeoEntity["kind"][] = [
@@ -135,16 +136,43 @@ export class WorldScene {
       );
       group.add(fill);
 
+      const pactId =
+        entity.kind === "city" && this.world
+          ? cityPactId(this.world, entity.id)
+          : null;
+      const pact = pactId && this.world ? pactById(this.world, pactId) : undefined;
+      const isPlayerPact =
+        pactId !== null && this.world?.playerPactId === pactId;
+      const outlinePad =
+        entity.kind === "city" && pact ? (isPlayerPact ? 5 : 3) : 0;
+      const edgeW = entity.bounds.w + outlinePad * 2;
+      const edgeH = entity.bounds.h + outlinePad * 2;
+
       const edges = new THREE.LineSegments(
-        new THREE.EdgesGeometry(new THREE.PlaneGeometry(entity.bounds.w, entity.bounds.h)),
+        new THREE.EdgesGeometry(new THREE.PlaneGeometry(edgeW, edgeH)),
         new THREE.LineBasicMaterial({
-          color: entity.kind === "city" ? 0x2a2118 : 0xffffff,
+          color:
+            entity.kind === "city" && pact
+              ? pact.color
+              : entity.kind === "city"
+                ? 0x2a2118
+                : 0xffffff,
           transparent: true,
-          opacity: entity.kind === "continent" ? 0.9 : 0.45,
+          opacity:
+            entity.kind === "city" && pact
+              ? isPlayerPact
+                ? 1
+                : 0.85
+              : entity.kind === "continent"
+                ? 0.9
+                : 0.45,
         }),
       );
-      edges.position.copy(fill.position);
-      edges.position.z += 0.1;
+      edges.position.set(
+        fill.position.x,
+        fill.position.y,
+        fill.position.z + 0.1,
+      );
       group.add(edges);
 
       if (entity.kind === "city" || entity.kind === "nation") {

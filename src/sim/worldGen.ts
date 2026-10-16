@@ -1,3 +1,4 @@
+import { generatePacts } from "./governance";
 import { Rng } from "./rng";
 import type {
   ArtPiece,
@@ -252,7 +253,7 @@ export function generateWorld(seed = 42): World {
     }
   }
 
-  return {
+  const world: World = {
     continent,
     entities,
     residents,
@@ -269,6 +270,9 @@ export function generateWorld(seed = 42): World {
     playerPactId: null,
     referencePrices: { food: 1, goods: 1, culture: 1 },
   };
+
+  world.pacts = generatePacts(world, rng);
+  return world;
 }
 
 function findAncestor(

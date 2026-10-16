@@ -5,6 +5,7 @@ import { DEFAULT_LAYERS } from "./sim/types";
 import { WorldScene } from "./render/scene";
 import { SimPanel } from "./ui/panel";
 import { ViewportControls } from "./input/viewportControls";
+import { showPactPicker } from "./ui/pactPicker";
 
 const app = document.querySelector<HTMLDivElement>("#app")!;
 
@@ -34,6 +35,7 @@ backdrop.hidden = true;
 let world = generateWorld(Date.now() % 100000);
 let paused = false;
 let simSpeed = 1;
+let awaitingPactChoice = world.playerPactId === null;
 
 const scene = new WorldScene(canvas, DEFAULT_LAYERS);
 scene.setWorld(world);
@@ -53,8 +55,12 @@ const panel = new SimPanel({
   },
   onRegenerate: () => {
     world = generateWorld(Math.floor(Math.random() * 1_000_000));
+    world.playerPactId = null;
+    awaitingPactChoice = true;
+    paused = true;
     scene.setWorld(world);
     panel.setSelected(null, world);
+    openPactPicker();
   },
   onSheetOpenChange: (open) => {
     backdrop.hidden = !open;
@@ -67,6 +73,23 @@ app.appendChild(backdrop);
 app.appendChild(panel.root);
 
 panel.setSelected(null, world);
+
+function openPactPicker(): void {
+  const existing = app.querySelector(".pact-picker-overlay");
+  existing?.remove();
+  const overlay = showPactPicker(world.pacts, (pactId) => {
+    world.playerPactId = pactId;
+    awaitingPactChoice = false;
+    paused = false;
+    scene.setWorld(world);
+  });
+  app.appendChild(overlay);
+}
+
+if (awaitingPactChoice) {
+  paused = true;
+  openPactPicker();
+}
 
 function updateHud(): void {
   const mobile = window.matchMedia("(max-width: 768px)").matches;
@@ -118,7 +141,7 @@ let accum = 0;
 function frame(now: number): void {
   const dt = (now - lastTime) / 1000;
   lastTime = now;
-  if (!paused) {
+  if (!paused && !awaitingPactChoice) {
     accum += dt * simSpeed;
     if (accum >= 0.05) {
       tickWorld(world, accum * 60);

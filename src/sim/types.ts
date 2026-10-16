@@ -71,6 +71,17 @@ export interface CityEconomy {
 
 export interface Pact {
   id: string;
+  name: string;
+  color: number;
+  memberCityIds: string[];
+  stances: {
+    preferMemberTrade: boolean;
+    openInternalBorders: boolean;
+    jointResearch: boolean;
+    mutualAid: boolean;
+  };
+  cooperationBudget: number;
+  stanceCooldownUntilDay: number;
 }
 
 export interface TradeRoute {
