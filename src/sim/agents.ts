@@ -1,3 +1,4 @@
+import { positionAlongRoute } from "./economy";
 import type { GeoEntity, Resident, World } from "./types";
 import { Rng } from "./rng";
 
@@ -12,7 +13,25 @@ function cityForResident(world: World, r: Resident): GeoEntity | undefined {
 }
 
 export function tickAgents(world: World): void {
+  const routeByMerchant = new Map(
+    world.routes
+      .filter((route) => route.merchantResidentId)
+      .map((route) => [route.merchantResidentId as string, route]),
+  );
+
   for (const r of world.residents) {
+    const tradeRoute = routeByMerchant.get(r.id);
+    if (tradeRoute) {
+      const pos = positionAlongRoute(world, tradeRoute, tradeRoute.progress);
+      if (pos) {
+        r.x = pos.x;
+        r.y = pos.y;
+        r.targetX = pos.x;
+        r.targetY = pos.y;
+      }
+      continue;
+    }
+
     const city = cityForResident(world, r);
     if (!city) continue;
 

@@ -1,6 +1,8 @@
 import * as THREE from "three";
+import { activeRoutes } from "../sim/economy";
 import { cityPactId, pactById } from "../sim/governance";
-import type { ArtPiece, GeoEntity, LayerVisibility, Resident, World } from "../sim/types";
+import { entityById } from "../sim/worldGen";
+import type { ArtPiece, GeoEntity, GoodKind, LayerVisibility, Resident, World } from "../sim/types";
 
 const GEO_ORDER: GeoEntity["kind"][] = [
   "continent",
@@ -17,6 +19,7 @@ export class WorldScene {
   private geoGroups = new Map<string, THREE.Group>();
   private residentMesh: THREE.InstancedMesh | null = null;
   private artGroup = new THREE.Group();
+  private routeGroup = new THREE.Group();
   private labelSprites: THREE.Sprite[] = [];
   private world: World | null = null;
   private layers: LayerVisibility;
@@ -45,6 +48,7 @@ export class WorldScene {
     this.camera.lookAt(0, 0, 0);
 
     this.scene.add(this.artGroup);
+    this.scene.add(this.routeGroup);
     window.addEventListener("resize", () => this.resize());
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", () => this.resize());
@@ -71,6 +75,7 @@ export class WorldScene {
     this.rebuildGeo();
     this.rebuildArt();
     this.rebuildResidents();
+    this.updateTradeRoutes(world);
   }
 
   setLayers(layers: LayerVisibility): void {
@@ -228,6 +233,66 @@ export class WorldScene {
     this.residentMesh.visible = this.layers.resident;
     this.scene.add(this.residentMesh);
     this.updateResidents(this.world.residents);
+  }
+
+  updateTradeRoutes(world: World): void {
+    while (this.routeGroup.children.length) {
+      const child = this.routeGroup.children[0]!;
+      this.routeGroup.remove(child);
+      if (child instanceof THREE.Line || child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    }
+
+    const goodColor = (good: GoodKind): number => {
+      switch (good) {
+        case "food":
+          return 0x7cb342;
+        case "goods":
+          return 0x64b5f6;
+        case "culture":
+          return 0xce93d8;
+        default: {
+          const _exhaustive: never = good;
+          return _exhaustive;
+        }
+      }
+    };
+
+    for (const route of activeRoutes(world)) {
+      const from = entityById(world, route.fromCityId);
+      const to = entityById(world, route.toCityId);
+      if (!from || !to) continue;
+
+      const fx = from.bounds.x + from.bounds.w / 2;
+      const fy = from.bounds.y + from.bounds.h / 2;
+      const tx = to.bounds.x + to.bounds.w / 2;
+      const ty = to.bounds.y + to.bounds.h / 2;
+      const px = fx + (tx - fx) * route.progress;
+      const py = fy + (ty - fy) * route.progress;
+
+      const lineGeom = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(fx, -fy, 6),
+        new THREE.Vector3(tx, -ty, 6),
+      ]);
+      const line = new THREE.Line(
+        lineGeom,
+        new THREE.LineBasicMaterial({
+          color: goodColor(route.good),
+          transparent: true,
+          opacity: 0.55,
+        }),
+      );
+      this.routeGroup.add(line);
+
+      const dot = new THREE.Mesh(
+        new THREE.CircleGeometry(3.5, 10),
+        new THREE.MeshBasicMaterial({ color: 0xffd166 }),
+      );
+      dot.position.set(px, -py, 14);
+      this.routeGroup.add(dot);
+    }
   }
 
   updateResidents(residents: Resident[]): void {

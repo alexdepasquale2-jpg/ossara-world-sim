@@ -86,6 +86,12 @@ export interface Pact {
 
 export interface TradeRoute {
   id: string;
+  fromCityId: string;
+  toCityId: string;
+  good: GoodKind;
+  volume: number;
+  progress: number;
+  merchantResidentId: string | null;
 }
 
 export interface InventionRecord {

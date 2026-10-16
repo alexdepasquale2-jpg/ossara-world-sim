@@ -147,6 +147,7 @@ function frame(now: number): void {
       tickWorld(world, accum * 60);
       accum = 0;
       scene.updateResidents(world.residents);
+      scene.updateTradeRoutes(world);
       panel.tick(world);
     }
   }

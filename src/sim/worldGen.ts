@@ -1,3 +1,4 @@
+import { initCityEconomies } from "./economy";
 import { generatePacts } from "./governance";
 import { Rng } from "./rng";
 import type {
@@ -272,6 +273,7 @@ export function generateWorld(seed = 42): World {
   };
 
   world.pacts = generatePacts(world, rng);
+  initCityEconomies(world);
   return world;
 }
 

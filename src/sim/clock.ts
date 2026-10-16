@@ -1,5 +1,6 @@
 import type { World } from "./types";
 import { tickAgents } from "./agents";
+import { tickEconomy } from "./economy";
 import { rollupHierarchy } from "./rollup";
 
 export interface SimContext {
@@ -12,6 +13,7 @@ export class SimClock {
     for (let s = 0; s < steps; s++) {
       world.tick++;
       if (world.tick % ctx.ticksPerDay === 0) world.day++;
+      tickEconomy(world);
       tickAgents(world);
       rollupHierarchy(world);
     }
