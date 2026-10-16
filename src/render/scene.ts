@@ -4,6 +4,7 @@ import { activeInventionsForCity } from "../sim/inventions";
 import { activeMigrationFlows } from "../sim/migration";
 import { cityPactId, pactById } from "../sim/governance";
 import { entityById } from "../sim/worldGen";
+import { citySupplyRatio } from "../sim/indicators";
 import type { ArtPiece, GeoEntity, GoodKind, LayerVisibility, Resident, World } from "../sim/types";
 
 const GEO_ORDER: GeoEntity["kind"][] = [
@@ -24,7 +25,10 @@ export class WorldScene {
   private routeGroup = new THREE.Group();
   private migrationGroup = new THREE.Group();
   private inventionGroup = new THREE.Group();
+  private indicatorGroup = new THREE.Group();
+  private starGroup: THREE.Points | null = null;
   private nightOverlay: THREE.Mesh | null = null;
+  private animTime = 0;
   private labelSprites: THREE.Sprite[] = [];
   private world: World | null = null;
   private layers: LayerVisibility;
@@ -37,7 +41,7 @@ export class WorldScene {
       alpha: false,
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setClearColor(0x0b0f14);
+    this.renderer.setClearColor(0x04060c);
 
     const aspect = window.innerWidth / window.innerHeight;
     const viewH = 800;
@@ -56,6 +60,8 @@ export class WorldScene {
     this.scene.add(this.routeGroup);
     this.scene.add(this.migrationGroup);
     this.scene.add(this.inventionGroup);
+    this.scene.add(this.indicatorGroup);
+    this.buildStarfield();
     window.addEventListener("resize", () => this.resize());
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", () => this.resize());
@@ -77,6 +83,26 @@ export class WorldScene {
     this.camera.updateProjectionMatrix();
   }
 
+  private buildStarfield(): void {
+    const count = 1200;
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 3600;
+      positions[i * 3 + 1] = (Math.random() - 0.5) * 2600;
+      positions[i * 3 + 2] = -40 - Math.random() * 20;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({
+      color: 0xa5c4ff,
+      size: 1.2,
+      transparent: true,
+      opacity: 0.55,
+    });
+    this.starGroup = new THREE.Points(geo, mat);
+    this.scene.add(this.starGroup);
+  }
+
   setWorld(world: World): void {
     this.world = world;
     this.rebuildGeo();
@@ -86,6 +112,60 @@ export class WorldScene {
     this.updateMigrationFlows(world);
     this.updateInventionPulses(world);
     this.updateDayNight(world);
+    this.updateCityIndicators(world);
+  }
+
+  updateCityIndicators(world: World): void {
+    while (this.indicatorGroup.children.length) {
+      const child = this.indicatorGroup.children[0]!;
+      this.indicatorGroup.remove(child);
+      if (child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    }
+    const pulse = 0.5 + Math.sin(this.animTime / 380) * 0.5;
+    for (const entity of world.entities) {
+      if (entity.kind !== "city") continue;
+      const cx = entity.bounds.x + entity.bounds.w / 2;
+      const cy = entity.bounds.y + entity.bounds.h / 2;
+      const food = citySupplyRatio(world, entity.id, "food");
+      const goods = citySupplyRatio(world, entity.id, "goods");
+      const culture = citySupplyRatio(world, entity.id, "culture");
+      const stress = Math.min(food, goods, culture);
+      const barW = Math.min(entity.bounds.w * 0.7, 28);
+      const colors = [0x86efac, 0x93c5fd, 0xe9d5ff];
+      const ratios = [food, goods, culture];
+      ratios.forEach((r, i) => {
+        const w = barW * r;
+        const mesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(Math.max(0.5, w), 2.2),
+          new THREE.MeshBasicMaterial({
+            color: colors[i]!,
+            transparent: true,
+            opacity: 0.75 + pulse * 0.15,
+          }),
+        );
+        mesh.position.set(
+          cx - barW / 2 + w / 2,
+          -(cy - entity.bounds.h / 2 - 8 - i * 3.5),
+          13,
+        );
+        this.indicatorGroup.add(mesh);
+      });
+      if (stress < 0.3) {
+        const warn = new THREE.Mesh(
+          new THREE.RingGeometry(4, 6 + pulse * 2, 16),
+          new THREE.MeshBasicMaterial({
+            color: 0xfb7185,
+            transparent: true,
+            opacity: 0.65,
+          }),
+        );
+        warn.position.set(cx, -cy, 12);
+        this.indicatorGroup.add(warn);
+      }
+    }
   }
 
   setLayers(layers: LayerVisibility): void {
@@ -419,12 +499,23 @@ export class WorldScene {
         new THREE.Vector3(fx, -fy, 6),
         new THREE.Vector3(tx, -ty, 6),
       ]);
+      const glow = new THREE.Line(
+        lineGeom.clone(),
+        new THREE.LineBasicMaterial({
+          color: goodColor(route.good),
+          transparent: true,
+          opacity: 0.22,
+          blending: THREE.AdditiveBlending,
+        }),
+      );
+      glow.scale.set(1.02, 1.02, 1);
+      this.routeGroup.add(glow);
       const line = new THREE.Line(
         lineGeom,
         new THREE.LineBasicMaterial({
           color: goodColor(route.good),
           transparent: true,
-          opacity: 0.55,
+          opacity: 0.75,
         }),
       );
       this.routeGroup.add(line);
@@ -553,7 +644,11 @@ export class WorldScene {
     }
   }
 
-  render(): void {
+  render(timeMs = 0): void {
+    this.animTime = timeMs;
+    if (this.starGroup) {
+      this.starGroup.rotation.z = timeMs * 0.000008;
+    }
     this.renderer.render(this.scene, this.camera);
   }
 

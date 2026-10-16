@@ -4,6 +4,7 @@ import { generateWorld, entityById } from "./sim/worldGen";
 import { DEFAULT_LAYERS } from "./sim/types";
 import { WorldScene } from "./render/scene";
 import { SimPanel } from "./ui/panel";
+import { CommandHud } from "./ui/commandHud";
 import { ViewportControls } from "./input/viewportControls";
 import { showPactPicker } from "./ui/pactPicker";
 
@@ -17,6 +18,8 @@ viewport.appendChild(canvas);
 const hud = document.createElement("div");
 hud.className = "hud";
 viewport.appendChild(hud);
+
+let dockOpen = false;
 
 const zoomFab = document.createElement("div");
 zoomFab.className = "zoom-fab";
@@ -59,7 +62,23 @@ function focusEntity(entityId: string): void {
   }
 }
 
-const panel = new SimPanel({
+const commandHud = new CommandHud({
+  onPause: () => {
+    paused = !paused;
+    commandHud.setPaused(paused);
+  },
+  onSpeed: (n) => {
+    simSpeed = n;
+    panel.root.querySelector<HTMLInputElement>("#speed")!.value = String(n);
+  },
+  onToggleDock: () => {
+    dockOpen = !dockOpen;
+    panel.setSheetOpen(dockOpen);
+  },
+});
+
+let panel!: SimPanel;
+panel = new SimPanel({
   onLayersChange: (layers) => scene.setLayers(layers),
   onFocusEntity: focusEntity,
   onSelect: (id) => {
@@ -69,9 +88,12 @@ const panel = new SimPanel({
   },
   onPauseToggle: () => {
     paused = !paused;
+    commandHud.setPaused(paused);
   },
   onSpeedChange: (speed) => {
     simSpeed = speed;
+    commandHud.root.querySelector<HTMLInputElement>("#cmd-speed")!.value =
+      String(speed);
   },
   onRegenerate: () => {
     world = generateWorld(Math.floor(Math.random() * 1_000_000));
@@ -80,19 +102,25 @@ const panel = new SimPanel({
     paused = true;
     scene.setWorld(world);
     panel.setSelected(null, world);
+    commandHud.update(world);
     openPactPicker();
   },
   onSheetOpenChange: (open) => {
+    dockOpen = open;
     backdrop.hidden = !open;
     backdrop.classList.toggle("visible", open);
   },
 });
 
+panel.root.classList.add("command-dock");
+
 app.appendChild(viewport);
 app.appendChild(backdrop);
+viewport.appendChild(commandHud.root);
 app.appendChild(panel.root);
 
 panel.setSelected(null, world);
+commandHud.update(world);
 
 function openPactPicker(): void {
   const existing = app.querySelector(".pact-picker-overlay");
@@ -113,11 +141,11 @@ if (awaitingPactChoice) {
 
 function updateHud(): void {
   const mobile = window.matchMedia("(max-width: 768px)").matches;
-  hud.textContent = mobile
-    ? "One finger pan · Pinch zoom · Tap to select"
-    : "Drag to pan · Scroll to zoom · Click to select";
   app.classList.toggle("layout-mobile", mobile);
   zoomFab.hidden = !mobile;
+  if (!mobile && !dockOpen) {
+    panel.setSheetOpen(false);
+  }
 }
 
 updateHud();
@@ -171,10 +199,12 @@ function frame(now: number): void {
       scene.updateMigrationFlows(world);
       scene.updateInventionPulses(world);
       scene.updateDayNight(world);
+      scene.updateCityIndicators(world);
       panel.tick(world);
+      commandHud.update(world);
     }
   }
-  scene.render();
+  scene.render(performance.now());
   requestAnimationFrame(frame);
 }
 

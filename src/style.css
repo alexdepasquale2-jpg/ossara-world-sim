@@ -1,3 +1,5 @@
+@import "./style/command.css";
+
 :root {
   color-scheme: dark;
   font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -28,44 +30,13 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
-#app {
-  display: grid;
-  grid-template-columns: minmax(280px, 320px) 1fr;
-  height: 100dvh;
-  width: 100%;
-}
-
-#app.layout-mobile {
-  display: block;
-  position: relative;
-}
-
-.panel {
+.panel:not(.command-dock) {
   background: var(--panel);
   border-right: 1px solid var(--border);
   padding: 1rem 1.1rem calc(1.5rem + var(--safe-bottom));
   overflow-y: auto;
   z-index: 4;
   -webkit-overflow-scrolling: touch;
-}
-
-.layout-mobile .panel {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  border-right: none;
-  border-top: 1px solid var(--border);
-  border-radius: 16px 16px 0 0;
-  padding: 0;
-  max-height: calc(76px + var(--safe-bottom));
-  overflow: hidden;
-  transition: max-height 0.28s ease;
-  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
-}
-
-.layout-mobile .panel.open {
-  max-height: min(72dvh, 520px);
 }
 
 .sheet-peek {

@@ -161,6 +161,16 @@ export function getPactTension(
   return row?.value ?? 0;
 }
 
+export function maxTensionForPlayerPact(world: World, pactId: string): number {
+  let max = 0;
+  for (const t of world.pactTensions) {
+    if (t.pactAId === pactId || t.pactBId === pactId) {
+      max = Math.max(max, t.value);
+    }
+  }
+  return max;
+}
+
 export function adjustPactTension(
   world: World,
   pactAId: string,

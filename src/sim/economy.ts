@@ -2,7 +2,14 @@ import { cityPactId } from "./governance";
 import { inventionMultipliersForCity } from "./inventions";
 import { maybePushShortageEvent } from "./events";
 import { entityById } from "./worldGen";
-import type { CityEconomy, GeoEntity, GoodKind, TradeRoute, World } from "./types";
+import type {
+  CityEconomy,
+  GeoEntity,
+  GoodKind,
+  TradeOpenness,
+  TradeRoute,
+  World,
+} from "./types";
 
 const GOODS: GoodKind[] = ["food", "goods", "culture"];
 const MAX_ROUTES = 40;
@@ -240,8 +247,44 @@ export function initCityEconomies(world: World): void {
       capacity: goodRecord(110 * scale, 85 * scale, 45 * scale),
       production: goodRecord(0, 0, 0),
       consumption: goodRecord(0, 0, 0),
+      localPrices: goodRecord(1, 1, 1),
     };
   });
+}
+
+function tariffMultiplier(openness: TradeOpenness): number {
+  switch (openness) {
+    case "closed":
+      return 1.32;
+    case "open":
+      return 0.86;
+    default:
+      return 1;
+  }
+}
+
+function updateLocalPricesAndWellbeing(world: World): void {
+  for (const econ of world.economies) {
+    const policy = world.cityPolicies.find((p) => p.cityId === econ.cityId);
+    const tariff = tariffMultiplier(policy?.tradeOpenness ?? "balanced");
+    for (const good of GOODS) {
+      econ.localPrices[good] = world.referencePrices[good] * tariff;
+    }
+    const city = cityForEconomy(world, econ);
+    if (!city) continue;
+    const foodDays =
+      econ.consumption.food > 0 ? econ.stock.food / econ.consumption.food : 99;
+    if (foodDays < 1.2) {
+      city.stats.happiness = Math.max(0.08, city.stats.happiness - 0.0035);
+      city.stats.economy = Math.max(0.1, city.stats.economy - 0.0015);
+    } else if (foodDays > 4.5) {
+      city.stats.happiness = Math.min(1, city.stats.happiness + 0.0008);
+    }
+    const goodsRatio = econ.stock.goods / Math.max(1, econ.capacity.goods);
+    if (goodsRatio > 0.75) {
+      city.stats.economy = Math.min(1, city.stats.economy + 0.0005);
+    }
+  }
 }
 
 export function activeRoutes(world: World): TradeRoute[] {
@@ -263,6 +306,7 @@ export function tickEconomy(world: World): void {
   }
 
   adjustReferencePrices(world);
+  updateLocalPricesAndWellbeing(world);
   advanceRoutes(world);
   createRoutes(world);
   assignMerchants(world);

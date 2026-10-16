@@ -1,0 +1,348 @@
+/* Command HUD — map-first immersive layout */
+
+#app {
+  display: block;
+  position: relative;
+  height: 100dvh;
+  width: 100%;
+  background: #050810;
+}
+
+#app.layout-mobile .viewport {
+  inset: 0;
+}
+
+.viewport {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.viewport::after {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse 85% 70% at 50% 45%,
+    transparent 0%,
+    rgba(5, 8, 16, 0.35) 55%,
+    rgba(2, 4, 10, 0.75) 100%
+  );
+  z-index: 1;
+}
+
+.command-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.command-hud * {
+  pointer-events: auto;
+}
+
+.command-bar {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  margin: max(10px, var(--safe-top)) max(12px, var(--safe-right)) 0
+    max(12px, var(--safe-left));
+  padding: 0.65rem 1rem;
+  border-radius: 16px;
+  background: linear-gradient(
+    135deg,
+    rgba(14, 22, 38, 0.88),
+    rgba(8, 12, 22, 0.72)
+  );
+  border: 1px solid rgba(120, 180, 255, 0.18);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(14px);
+}
+
+.command-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.brand-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: conic-gradient(from 210deg, #22d3ee, #a78bfa, #34d399, #22d3ee);
+  box-shadow: 0 0 24px rgba(34, 211, 238, 0.35);
+}
+
+.command-brand strong {
+  display: block;
+  font-size: 0.95rem;
+  letter-spacing: 0.14em;
+}
+
+.brand-sub {
+  font-size: 0.62rem;
+  color: #8b9cb3;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vital-rings {
+  display: flex;
+  gap: 0.55rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.vital {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8b9cb3;
+}
+
+.vital svg {
+  width: 42px;
+  height: 42px;
+  transform: rotate(-90deg);
+}
+
+.ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.08);
+  stroke-width: 4;
+}
+
+.ring-fill {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.35s ease;
+}
+
+.market-ticker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  min-width: 140px;
+}
+
+.tick.food {
+  color: #86efac;
+}
+.tick.goods {
+  color: #93c5fd;
+}
+.tick.culture {
+  color: #e9d5ff;
+}
+
+.command-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.day-pill,
+.pact-pill {
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pact-pill {
+  border-color: var(--pact-color, #6ee7b7);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--pact-color, #6ee7b7) 40%, transparent);
+}
+
+.command-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cmd-btn {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e8eef5;
+  border-radius: 10px;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  min-height: 40px;
+}
+
+.cmd-btn.accent {
+  background: linear-gradient(135deg, rgba(34, 211, 238, 0.25), rgba(167, 139, 250, 0.2));
+  border-color: rgba(34, 211, 238, 0.45);
+}
+
+.cmd-speed {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.65rem;
+  color: #8b9cb3;
+  gap: 0.15rem;
+  min-width: 88px;
+}
+
+.indicator-rail {
+  position: absolute;
+  left: max(12px, var(--safe-left));
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  max-width: 160px;
+}
+
+.chip {
+  padding: 0.45rem 0.65rem;
+  border-radius: 12px;
+  background: rgba(10, 16, 28, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.chip-label {
+  display: block;
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #8b9cb3;
+}
+
+.chip strong {
+  font-size: 0.95rem;
+}
+
+.chip-alert {
+  border-color: rgba(251, 113, 133, 0.65);
+  animation: pulse-border 1.2s ease infinite;
+}
+
+.chip-warn {
+  border-color: rgba(251, 191, 36, 0.55);
+}
+
+@keyframes pulse-border {
+  0%,
+  100% {
+    box-shadow: 0 0 0 rgba(251, 113, 133, 0);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(251, 113, 133, 0.45);
+  }
+}
+
+/* Command deck (panel) */
+.panel.command-dock {
+  position: fixed;
+  top: max(88px, calc(72px + var(--safe-top)));
+  right: max(10px, var(--safe-right));
+  bottom: max(12px, var(--safe-bottom));
+  width: min(380px, calc(100vw - 20px));
+  max-height: none;
+  border-radius: 18px;
+  border: 1px solid rgba(120, 180, 255, 0.2);
+  background: linear-gradient(
+    160deg,
+    rgba(12, 18, 32, 0.94),
+    rgba(6, 10, 18, 0.88)
+  );
+  box-shadow: -8px 0 48px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(16px);
+  transform: translateX(calc(100% + 24px));
+  transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
+  padding: 0;
+  overflow: hidden;
+  z-index: 5;
+}
+
+.panel.command-dock.open {
+  transform: translateX(0);
+}
+
+.layout-mobile .panel.command-dock {
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-height: calc(76px + var(--safe-bottom));
+  transform: translateY(0);
+  border-radius: 18px 18px 0 0;
+}
+
+.layout-mobile .panel.command-dock.open {
+  max-height: min(72dvh, 520px);
+}
+
+.layout-mobile .panel.command-dock:not(.open) {
+  transform: translateY(calc(100% - 76px - var(--safe-bottom)));
+}
+
+.hud {
+  display: none;
+}
+
+.zoom-fab {
+  bottom: max(100px, calc(80px + var(--safe-bottom)));
+  z-index: 4;
+}
+
+.fab {
+  background: rgba(10, 16, 28, 0.9);
+  border-color: rgba(34, 211, 238, 0.35);
+}
+
+@media (max-width: 900px) {
+  .command-bar {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto;
+  }
+
+  .command-brand {
+    grid-column: 1 / -1;
+  }
+
+  .vital-rings {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .market-ticker {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+  }
+
+  .indicator-rail {
+    top: auto;
+    bottom: max(100px, calc(88px + var(--safe-bottom)));
+    transform: none;
+    flex-direction: row;
+    flex-wrap: wrap;
+    max-width: calc(100% - 24px);
+  }
+
+  .chip {
+    flex: 1 1 45%;
+  }
+}

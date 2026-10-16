@@ -67,6 +67,7 @@ export interface CityEconomy {
   capacity: Record<GoodKind, number>;
   production: Record<GoodKind, number>;
   consumption: Record<GoodKind, number>;
+  localPrices: Record<GoodKind, number>;
 }
 
 export interface Pact {
