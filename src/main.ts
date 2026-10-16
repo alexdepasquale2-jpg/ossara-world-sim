@@ -40,8 +40,28 @@ let awaitingPactChoice = world.playerPactId === null;
 const scene = new WorldScene(canvas, DEFAULT_LAYERS);
 scene.setWorld(world);
 
+let controls!: ViewportControls;
+
+function focusEntity(entityId: string): void {
+  panel.setSelected(entityId, world);
+  const entity = entityById(world, entityId);
+  scene.highlightEntity(entity ?? null);
+  if (entity && controls) {
+    const cx = entity.bounds.x + entity.bounds.w / 2;
+    const cy = entity.bounds.y + entity.bounds.h / 2;
+    controls.panX = cx - window.innerWidth / 4;
+    controls.panY = -(cy - window.innerHeight / 4);
+    scene.setPan(controls.panX, controls.panY);
+  }
+  if (window.matchMedia("(max-width: 768px)").matches) {
+    panel.setSheetOpen(true);
+    panel.setActiveTab("overview");
+  }
+}
+
 const panel = new SimPanel({
   onLayersChange: (layers) => scene.setLayers(layers),
+  onFocusEntity: focusEntity,
   onSelect: (id) => {
     const entity = id ? entityById(world, id) : null;
     panel.setSelected(id, world);
@@ -108,7 +128,7 @@ window.matchMedia("(max-width: 768px)").addEventListener("change", () => {
 
 backdrop.addEventListener("click", () => panel.setSheetOpen(false));
 
-const controls = new ViewportControls({
+controls = new ViewportControls({
   canvas,
   onChange: ({ panX, panY, zoom }) => {
     scene.setPan(panX, panY);

@@ -2,6 +2,15 @@ import type { GeoEntity, LayerVisibility, ViewState, World } from "../sim/types"
 import { DEFAULT_LAYERS } from "../sim/types";
 import { breadcrumb, entityById } from "../sim/worldGen";
 import { formatPopulation, pct } from "../sim/engine";
+import {
+  fundCooperationEvent,
+  pactById,
+  togglePactStance,
+} from "../sim/governance";
+import { renderFeed } from "./feed";
+import { pendingDecisionCount, renderDecisionCard } from "./decisions";
+
+export type PanelTab = "overview" | "feed" | "bloc" | "layers";
 
 export interface PanelCallbacks {
   onLayersChange: (layers: LayerVisibility) => void;
@@ -10,6 +19,7 @@ export interface PanelCallbacks {
   onSpeedChange: (speed: number) => void;
   onRegenerate: () => void;
   onSheetOpenChange?: (open: boolean) => void;
+  onFocusEntity: (entityId: string) => void;
 }
 
 export class SimPanel {
@@ -17,7 +27,13 @@ export class SimPanel {
   private statsEl: HTMLElement;
   private breadcrumbEl: HTMLElement;
   private peekSummaryEl: HTMLElement;
+  private feedEl: HTMLElement;
+  private blocEl: HTMLElement;
+  private layersContainer: HTMLElement;
+  private decisionHost: HTMLElement;
+  private decisionBadge: HTMLElement;
   private sheetOpen = false;
+  private activeTab: PanelTab = "overview";
   private callbacks: PanelCallbacks;
   private view: ViewState;
 
@@ -36,18 +52,27 @@ export class SimPanel {
     this.root = document.createElement("aside");
     this.root.className = "panel";
     this.root.innerHTML = `
+      <div class="decision-host" id="decision-host" hidden></div>
       <div class="sheet-peek" id="sheet-peek">
         <button type="button" class="sheet-handle" id="sheet-toggle" aria-expanded="false">
           <span class="handle-bar"></span>
           <span class="handle-label">Controls</span>
+          <span class="decision-badge" id="decision-badge" hidden>0</span>
         </button>
         <div class="peek-summary" id="peek-summary">Day 1 · Pan & pinch the map</div>
         <button type="button" class="btn peek-pause" id="btn-pause-peek">Pause</button>
       </div>
+      <nav class="tab-bar" role="tablist" aria-label="Simulation panels">
+        <button type="button" class="tab active" data-tab="overview">Overview</button>
+        <button type="button" class="tab" data-tab="feed">Feed</button>
+        <button type="button" class="tab" data-tab="bloc">Bloc</button>
+        <button type="button" class="tab" data-tab="layers">Layers</button>
+      </nav>
       <div class="sheet-body">
+      <div class="tab-panel active" data-panel="overview">
       <header class="panel-header">
         <h1>Ossara Sim</h1>
-        <p class="subtitle">Continent · Nation · Region · State · City · People · Art</p>
+        <p class="subtitle">Continent · Blocs · Trade · Civic breakthroughs</p>
       </header>
       <section class="panel-section">
         <h2>Simulation</h2>
@@ -59,10 +84,6 @@ export class SimPanel {
           </label>
         </div>
         <button type="button" id="btn-regen" class="btn ghost">Regenerate world</button>
-      </section>
-      <section class="panel-section">
-        <h2>Layers</h2>
-        <div class="layers" id="layers"></div>
       </section>
       <section class="panel-section">
         <h2>Selection</h2>
@@ -79,12 +100,29 @@ export class SimPanel {
         </ul>
       </section>
       </div>
+      <div class="tab-panel" data-panel="feed" id="feed-panel"></div>
+      <div class="tab-panel" data-panel="bloc" id="bloc-panel"></div>
+      <div class="tab-panel" data-panel="layers">
+      <section class="panel-section">
+        <h2>Layers</h2>
+        <div class="layers" id="layers"></div>
+      </section>
+      </div>
+      </div>
     `;
 
     this.statsEl = this.root.querySelector("#stats")!;
     this.breadcrumbEl = this.root.querySelector("#breadcrumb")!;
     this.peekSummaryEl = this.root.querySelector("#peek-summary")!;
+    this.feedEl = this.root.querySelector("#feed-panel")!;
+    this.blocEl = this.root.querySelector("#bloc-panel")!;
+    this.layersContainer = this.root.querySelector("#layers")!;
+    this.decisionHost = this.root.querySelector("#decision-host")!;
+    this.decisionBadge = this.root.querySelector("#decision-badge")!;
+
     this.bindLayers();
+    this.bindTabs();
+
     const togglePause = () => {
       this.view.paused = !this.view.paused;
       this.updatePauseLabel();
@@ -144,12 +182,103 @@ export class SimPanel {
     } else {
       this.statsEl.innerHTML = this.globalSummary(world);
     }
-    const dayEl = this.root.querySelector(".day-counter");
-    if (dayEl) dayEl.textContent = `Day ${world.day}`;
     const selected = this.view.selectedId
       ? entityById(world, this.view.selectedId)
       : null;
     this.updatePeek(world, selected?.name);
+    this.refreshFeed(world);
+    this.refreshBloc(world);
+    this.refreshDecisions(world);
+  }
+
+  private bindTabs(): void {
+    this.root.querySelectorAll(".tab-bar .tab").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tab = (btn as HTMLElement).dataset.tab as PanelTab;
+        this.setActiveTab(tab);
+      });
+    });
+  }
+
+  setActiveTab(tab: PanelTab): void {
+    this.activeTab = tab;
+    this.root.querySelectorAll(".tab-bar .tab").forEach((el) => {
+      el.classList.toggle("active", (el as HTMLElement).dataset.tab === tab);
+    });
+    this.root.querySelectorAll(".tab-panel").forEach((el) => {
+      el.classList.toggle(
+        "active",
+        (el as HTMLElement).dataset.panel === tab,
+      );
+    });
+  }
+
+  private refreshFeed(world: World): void {
+    if (this.activeTab !== "feed" && !this.sheetOpen) return;
+    renderFeed(this.feedEl, world, {
+      onFocusEntity: (id) => this.callbacks.onFocusEntity(id),
+    });
+  }
+
+  private refreshBloc(world: World): void {
+    const pactId = world.playerPactId;
+    const pact = pactId ? pactById(world, pactId) : undefined;
+    if (!pact) {
+      this.blocEl.innerHTML =
+        `<p class="feed-empty">Choose a patron bloc to manage stances.</p>`;
+      return;
+    }
+
+    const stanceRows = (
+      Object.keys(pact.stances) as (keyof typeof pact.stances)[]
+    )
+      .map((key) => {
+        const on = pact.stances[key];
+        const label = key.replace(/([A-Z])/g, " $1");
+        return `
+          <label class="stance-toggle">
+            <input type="checkbox" data-stance="${key}" ${on ? "checked" : ""} />
+            ${label}
+          </label>
+        `;
+      })
+      .join("");
+
+    this.blocEl.innerHTML = `
+      <section class="panel-section">
+        <h2>${pact.name}</h2>
+        <p class="meta">Cooperation budget: <strong>${Math.round(pact.cooperationBudget)}</strong></p>
+        <div class="stance-grid">${stanceRows}</div>
+        <button type="button" class="btn primary bloc-fund" id="btn-fund-bloc">Fund joint program (−15)</button>
+        <p class="meta">Stance changes respect a ${3}-day cooldown.</p>
+      </section>
+    `;
+
+    this.blocEl.querySelectorAll("[data-stance]").forEach((input) => {
+      input.addEventListener("change", () => {
+        const key = (input as HTMLInputElement).dataset
+          .stance as keyof typeof pact.stances;
+        const ok = togglePactStance(world, pact.id, key);
+        if (!ok) {
+          (input as HTMLInputElement).checked = pact.stances[key];
+        }
+        this.refreshBloc(world);
+      });
+    });
+
+    this.blocEl.querySelector("#btn-fund-bloc")?.addEventListener("click", () => {
+      fundCooperationEvent(world, pact.id);
+      this.refreshBloc(world);
+    });
+  }
+
+  private refreshDecisions(world: World): void {
+    const count = pendingDecisionCount(world);
+    this.decisionBadge.hidden = count === 0;
+    this.decisionBadge.textContent = String(count);
+    renderDecisionCard(this.decisionHost, world, {
+      onResolved: () => this.refreshDecisions(world),
+    });
   }
 
   private inspectHint(): string {
@@ -161,20 +290,25 @@ export class SimPanel {
   private updatePeek(world: World, selectionName?: string): void {
     const c = world.continent.stats;
     const sel = selectionName ? ` · ${selectionName}` : "";
-    this.peekSummaryEl.textContent = `Day ${world.day} · ${formatPopulation(c.population)} pop · ${pct(c.happiness)} happy${sel}`;
+    const decisions = pendingDecisionCount(world);
+    const badge = decisions > 0 ? ` · ${decisions} decision${decisions > 1 ? "s" : ""}` : "";
+    this.peekSummaryEl.textContent = `Day ${world.day} · ${formatPopulation(c.population)} pop · ${pct(c.happiness)} happy${sel}${badge}`;
   }
 
   private globalSummary(world: World): string {
     const c = world.continent.stats;
     const people = world.residents.length;
     const art = world.art.length;
+    const routes = world.routes.length;
+    const inv = world.inventions.filter((i) => !i.obsolete).length;
     return `
       <div class="stat-grid">
         <div><span class="label">Day</span><strong class="day-counter">${world.day}</strong></div>
         <div><span class="label">Population</span><strong>${formatPopulation(c.population)}</strong></div>
         <div><span class="label">Happiness</span><strong>${pct(c.happiness)}</strong></div>
         <div><span class="label">Economy</span><strong>${pct(c.economy)}</strong></div>
-        <div><span class="label">Art index</span><strong>${pct(c.artIndex)}</strong></div>
+        <div><span class="label">Trade routes</span><strong>${routes}</strong></div>
+        <div><span class="label">Breakthroughs</span><strong>${inv}</strong></div>
         <div><span class="label">Agents</span><strong>${people}</strong></div>
         <div><span class="label">Artworks</span><strong>${art}</strong></div>
       </div>
@@ -182,7 +316,6 @@ export class SimPanel {
   }
 
   private bindLayers(): void {
-    const container = this.root.querySelector("#layers")!;
     const labels: Record<keyof LayerVisibility, string> = {
       continent: "Continent",
       nation: "Nations",
@@ -199,7 +332,7 @@ export class SimPanel {
       const label = document.createElement("label");
       label.className = "layer-toggle";
       label.innerHTML = `<input type="checkbox" id="${id}" checked /> ${labels[key]}`;
-      container.appendChild(label);
+      this.layersContainer.appendChild(label);
       label.querySelector("input")!.addEventListener("change", (e) => {
         this.view.layers[key] = (e.target as HTMLInputElement).checked;
         this.callbacks.onLayersChange({ ...this.view.layers });
