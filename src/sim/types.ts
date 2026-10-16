@@ -59,6 +59,36 @@ export interface ArtPiece {
   hue: number;
 }
 
+export type GoodKind = "food" | "goods" | "culture";
+
+export interface CityEconomy {
+  cityId: string;
+  stock: Record<GoodKind, number>;
+  capacity: Record<GoodKind, number>;
+  production: Record<GoodKind, number>;
+  consumption: Record<GoodKind, number>;
+}
+
+export interface Pact {
+  id: string;
+}
+
+export interface TradeRoute {
+  id: string;
+}
+
+export interface InventionRecord {
+  id: string;
+}
+
+export interface SimEvent {
+  id: string;
+}
+
+export interface PendingDecision {
+  id: string;
+}
+
 export interface World {
   continent: GeoEntity;
   entities: GeoEntity[];
@@ -66,6 +96,15 @@ export interface World {
   art: ArtPiece[];
   tick: number;
   day: number;
+  seed: number;
+  economies: CityEconomy[];
+  pacts: Pact[];
+  routes: TradeRoute[];
+  inventions: InventionRecord[];
+  events: SimEvent[];
+  decisions: PendingDecision[];
+  playerPactId: string | null;
+  referencePrices: Record<GoodKind, number>;
 }
 
 export type LayerVisibility = Record<EntityKind, boolean>;

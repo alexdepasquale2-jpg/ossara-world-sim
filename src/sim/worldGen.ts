@@ -259,6 +259,15 @@ export function generateWorld(seed = 42): World {
     art,
     tick: 0,
     day: 1,
+    seed,
+    economies: [],
+    pacts: [],
+    routes: [],
+    inventions: [],
+    events: [],
+    decisions: [],
+    playerPactId: null,
+    referencePrices: { food: 1, goods: 1, culture: 1 },
   };
 }
 
