@@ -1,7 +1,7 @@
 # Ossara: Blocs & Breakthroughs — Design Spec
 
 **Date:** 2026-10-16  
-**Status:** Approved — see `docs/superpowers/plans/2026-10-16-ossara-blocs-breakthroughs.md`  
+**Status:** Implemented (in progress) — see `docs/superpowers/plans/2026-10-16-ossara-blocs-breakthroughs.md`  
 **Base:** Ossara v1 (Vite, TypeScript, Three.js 2D, GitHub Pages)
 
 ## 1. Vision & scope
