@@ -191,6 +191,7 @@ export class SimPanel {
       city: "Cities",
       resident: "Residents",
       art: "Art",
+      migration: "Migration",
     };
     for (const key of Object.keys(DEFAULT_LAYERS) as (keyof LayerVisibility)[]) {
       const id = `layer-${key}`;

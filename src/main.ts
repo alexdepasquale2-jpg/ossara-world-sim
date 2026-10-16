@@ -148,6 +148,7 @@ function frame(now: number): void {
       accum = 0;
       scene.updateResidents(world.residents);
       scene.updateTradeRoutes(world);
+      scene.updateMigrationFlows(world);
       panel.tick(world);
     }
   }

@@ -124,7 +124,9 @@ export interface World {
   referencePrices: Record<GoodKind, number>;
 }
 
-export type LayerVisibility = Record<EntityKind, boolean>;
+export type OverlayLayer = "migration";
+
+export type LayerVisibility = Record<EntityKind | OverlayLayer, boolean>;
 
 export interface ViewState {
   zoom: number;
@@ -144,4 +146,5 @@ export const DEFAULT_LAYERS: LayerVisibility = {
   city: true,
   resident: true,
   art: true,
+  migration: false,
 };

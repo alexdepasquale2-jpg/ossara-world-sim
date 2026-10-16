@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { activeRoutes } from "../sim/economy";
+import { activeRoutes, cityCenter } from "../sim/economy";
+import { activeMigrationFlows } from "../sim/migration";
 import { cityPactId, pactById } from "../sim/governance";
 import { entityById } from "../sim/worldGen";
 import type { ArtPiece, GeoEntity, GoodKind, LayerVisibility, Resident, World } from "../sim/types";
@@ -20,6 +21,7 @@ export class WorldScene {
   private residentMesh: THREE.InstancedMesh | null = null;
   private artGroup = new THREE.Group();
   private routeGroup = new THREE.Group();
+  private migrationGroup = new THREE.Group();
   private labelSprites: THREE.Sprite[] = [];
   private world: World | null = null;
   private layers: LayerVisibility;
@@ -49,6 +51,7 @@ export class WorldScene {
 
     this.scene.add(this.artGroup);
     this.scene.add(this.routeGroup);
+    this.scene.add(this.migrationGroup);
     window.addEventListener("resize", () => this.resize());
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", () => this.resize());
@@ -76,6 +79,7 @@ export class WorldScene {
     this.rebuildArt();
     this.rebuildResidents();
     this.updateTradeRoutes(world);
+    this.updateMigrationFlows(world);
   }
 
   setLayers(layers: LayerVisibility): void {
@@ -103,6 +107,7 @@ export class WorldScene {
       this.residentMesh.visible = this.layers.resident;
     }
     this.artGroup.visible = this.layers.art;
+    this.migrationGroup.visible = this.layers.migration;
   }
 
   private rebuildGeo(): void {
@@ -233,6 +238,69 @@ export class WorldScene {
     this.residentMesh.visible = this.layers.resident;
     this.scene.add(this.residentMesh);
     this.updateResidents(this.world.residents);
+  }
+
+  updateMigrationFlows(_world: World): void {
+    while (this.migrationGroup.children.length) {
+      const child = this.migrationGroup.children[0]!;
+      this.migrationGroup.remove(child);
+      if (child instanceof THREE.Line || child instanceof THREE.Mesh) {
+        child.geometry.dispose();
+        (child.material as THREE.Material).dispose();
+      }
+    }
+
+    if (!this.layers.migration) {
+      this.migrationGroup.visible = false;
+      return;
+    }
+    this.migrationGroup.visible = true;
+
+    for (const flow of activeMigrationFlows()) {
+      const from = entityById(_world, flow.fromCityId);
+      const to = entityById(_world, flow.toCityId);
+      if (!from || !to) continue;
+
+      const a = cityCenter(from);
+      const b = cityCenter(to);
+      const fx = a.x;
+      const fy = a.y;
+      const tx = b.x;
+      const ty = b.y;
+      const mx = (fx + tx) / 2;
+      const my = (fy + ty) / 2;
+
+      const lineGeom = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(fx, -fy, 7),
+        new THREE.Vector3(tx, -ty, 7),
+      ]);
+      const line = new THREE.Line(
+        lineGeom,
+        new THREE.LineBasicMaterial({
+          color: 0xf4a261,
+          transparent: true,
+          opacity: 0.7,
+        }),
+      );
+      this.migrationGroup.add(line);
+
+      const dx = tx - fx;
+      const dy = ty - fy;
+      const len = Math.hypot(dx, dy) || 1;
+      const ux = dx / len;
+      const uy = dy / len;
+      const perpX = -uy;
+      const perpY = ux;
+      const tip = new THREE.Vector3(mx + ux * 10, -(my + uy * 10), 8);
+      const wingA = new THREE.Vector3(mx + perpX * 5, -(my + perpY * 5), 8);
+      const wingB = new THREE.Vector3(mx - perpX * 5, -(my - perpY * 5), 8);
+      const arrowGeom = new THREE.BufferGeometry().setFromPoints([wingA, tip, wingB]);
+      const arrow = new THREE.Line(
+        arrowGeom,
+        new THREE.LineBasicMaterial({ color: 0xe76f51 }),
+      );
+      this.migrationGroup.add(arrow);
+    }
   }
 
   updateTradeRoutes(world: World): void {
