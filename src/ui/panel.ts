@@ -122,6 +122,10 @@ export class SimPanel {
 
     this.bindLayers();
     this.bindTabs();
+    this.syncMobileTabLabels();
+    window.matchMedia("(max-width: 768px)").addEventListener("change", () => {
+      this.syncMobileTabLabels();
+    });
 
     const togglePause = () => {
       this.view.paused = !this.view.paused;
@@ -189,6 +193,12 @@ export class SimPanel {
     this.refreshFeed(world);
     this.refreshBloc(world);
     this.refreshDecisions(world);
+  }
+
+  private syncMobileTabLabels(): void {
+    const mobile = window.matchMedia("(max-width: 768px)").matches;
+    const overview = this.root.querySelector('.tab[data-tab="overview"]');
+    if (overview) overview.textContent = mobile ? "Stats" : "Overview";
   }
 
   private bindTabs(): void {
